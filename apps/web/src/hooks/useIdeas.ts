@@ -29,7 +29,7 @@ export { ideaBoardKeys, ideaKeys };
 
 // ───────────────────────── queries ─────────────────────────
 
-export function useIdeaBoards() {
+export function useIdeaBoards(enabled = true) {
   const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ideaBoardKeys.lists(),
@@ -37,11 +37,11 @@ export function useIdeaBoards() {
       const api = getApi();
       return await api.ideas.boards.list();
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && enabled,
   });
 }
 
-export function useIdeaColumns(boardId: string | undefined) {
+export function useIdeaColumns(boardId: string | undefined, enabled = true) {
   const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ideaBoardKeys.columns(boardId ?? ""),
@@ -49,7 +49,7 @@ export function useIdeaColumns(boardId: string | undefined) {
       const api = getApi();
       return await api.ideas.columns.list(boardId!);
     },
-    enabled: isAuthenticated && !!boardId,
+    enabled: isAuthenticated && !!boardId && enabled,
   });
 }
 

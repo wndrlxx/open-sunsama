@@ -14,7 +14,7 @@ export interface UndoEntry {
 
 interface UndoRedoContextValue {
   record: (entry: UndoEntry) => void;
-  undo: () => void;
+  undo: (entry?: UndoEntry) => void;
   redo: () => void;
 }
 
@@ -45,10 +45,18 @@ export function UndoRedoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const run = React.useCallback(
-    async (kind: "undo" | "redo") => {
+    async (kind: "undo" | "redo", expectedEntry?: UndoEntry) => {
       if (busy.current) return;
       const from = kind === "undo" ? undoStack : redoStack;
       const to = kind === "undo" ? redoStack : undoStack;
+      // A stale toast must never undo a different, newer action.
+      if (
+        expectedEntry &&
+        from.current[from.current.length - 1] !== expectedEntry
+      ) {
+        toast({ title: "Undo newer changes first" });
+        return;
+      }
       const entry = from.current.pop();
       if (!entry) {
         toast({
@@ -79,9 +87,12 @@ export function UndoRedoProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const undo = React.useCallback(() => {
-    void run("undo");
-  }, [run]);
+  const undo = React.useCallback(
+    (entry?: UndoEntry) => {
+      void run("undo", entry);
+    },
+    [run]
+  );
   const redo = React.useCallback(() => {
     void run("redo");
   }, [run]);

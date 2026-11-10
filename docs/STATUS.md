@@ -1,10 +1,11 @@
 # Project status
 
-Current phase: improve SEO and answer-engine readiness. Updated 4 November 2026.
+Current phase: improve SEO and answer-engine readiness. Updated 10 November 2026.
 
 | Work | Tier | State | Date | Spec |
 | --- | --- | --- | --- | --- |
 | SEO/AEO audit, complete crawler output and HTTP correctness | Core | browser-validated | 2026-11-04 | [PRD](../prd/seo-aeo-readiness/PRD.md) |
+| Move Ideas cards between boards through nested card menus | Core | locally validated on feature branch | 2026-11-10 | [Plan and validation](../.todo/move-ideas-between-boards/PLAN.md) |
 
 Baseline: 6.6/10 on measured dimensions; implementation target 8.5/10. See the [rubric and evidence](marketing/seo-aeo-audit-2026-11-04.md). Rankings and citation gains remain unverified until recrawl and measurement.
 
