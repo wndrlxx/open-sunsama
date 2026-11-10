@@ -28,6 +28,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
+  DropdownMenuPortal,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
@@ -36,6 +37,7 @@ import {
   ContextMenuSub,
   ContextMenuSubTrigger,
   ContextMenuSubContent,
+  ContextMenuPortal,
 } from "@/components/ui";
 import {
   Popover,
@@ -45,6 +47,8 @@ import {
 import { HtmlContent } from "@/components/ui/html-content";
 import { useDeleteIdea, usePromoteIdea, useUpdateIdea } from "@/hooks/useIdeas";
 import { IdeaEditDialog } from "./idea-edit-dialog";
+import { MoveToBoardMenu, type MoveMenuFamily } from "./move-to-board-menu";
+import { useMoveIdea } from "@/hooks/useMoveIdea";
 
 /** Priority swatch styles — identical to the kanban task card. */
 const PRIORITY_STYLES: Record<TaskPriority, string> = {
@@ -54,10 +58,7 @@ const PRIORITY_STYLES: Record<TaskPriority, string> = {
   P3: "bg-slate-400/10 text-slate-400 dark:text-slate-500",
 };
 
-
-
 /** Duration presets in minutes — same grid as the kanban task card. */
-
 
 interface IdeaCardProps {
   idea: Idea;
@@ -71,12 +72,8 @@ interface IdeaCardProps {
 
 /** Menu family — lets one render path drive both the ⋯ dropdown and the
  * right-click context menu without duplicating the item list. */
-interface MenuFamily {
-  Item: React.ElementType;
+interface MenuFamily extends MoveMenuFamily {
   Separator: React.ElementType;
-  Sub: React.ElementType;
-  SubTrigger: React.ElementType;
-  SubContent: React.ElementType;
 }
 
 const DROPDOWN_FAMILY: MenuFamily = {
@@ -85,6 +82,7 @@ const DROPDOWN_FAMILY: MenuFamily = {
   Sub: DropdownMenuSub,
   SubTrigger: DropdownMenuSubTrigger,
   SubContent: DropdownMenuSubContent,
+  Portal: DropdownMenuPortal,
 };
 
 const CONTEXT_FAMILY: MenuFamily = {
@@ -93,6 +91,7 @@ const CONTEXT_FAMILY: MenuFamily = {
   Sub: ContextMenuSub,
   SubTrigger: ContextMenuSubTrigger,
   SubContent: ContextMenuSubContent,
+  Portal: ContextMenuPortal,
 };
 
 interface IdeaMenuHandlers {
@@ -110,11 +109,14 @@ function IdeaMenuItems({
   family: C,
   handlers,
   otherColumns,
+  idea,
 }: {
   family: MenuFamily;
   handlers: IdeaMenuHandlers;
   otherColumns: IdeaColumn[];
+  idea: Idea;
 }) {
+  const moveIdea = useMoveIdea();
   return (
     <>
       <C.Item onSelect={handlers.onAddToToday}>
@@ -160,6 +162,13 @@ function IdeaMenuItems({
           </C.SubContent>
         </C.Sub>
       )}
+
+      <MoveToBoardMenu
+        family={C}
+        boardId={idea.boardId}
+        disabled={moveIdea.isPending}
+        onMove={(board, column) => moveIdea.mutate({ idea, board, column })}
+      />
 
       <C.Separator />
 
@@ -222,16 +231,14 @@ export function IdeaCard({
   let showDropBelow = false;
   if (showIndicator) {
     const activeColumn = sortable.active?.data?.current?.columnId as
-      | string
-      | undefined;
+      string | undefined;
     if (activeColumn !== idea.columnId) {
       // Cross-column drop inserts before the hovered card.
       showDropAbove = true;
     } else {
       const activeIndex =
         (sortable.active?.data?.current?.sortable?.index as
-          | number
-          | undefined) ?? -1;
+          number | undefined) ?? -1;
       showDropAbove = activeIndex > sortable.index;
       showDropBelow = activeIndex < sortable.index && activeIndex !== -1;
     }
@@ -291,6 +298,7 @@ export function IdeaCard({
 
   const cardInner = (
     <div
+      data-idea-id={idea.id}
       ref={overlay ? undefined : sortable.setNodeRef}
       style={style}
       {...(overlay ? {} : sortable.attributes)}
@@ -383,7 +391,11 @@ export function IdeaCard({
               align="start"
               onClick={(e) => e.stopPropagation()}
             >
-              <DurationPicker value={idea.estimatedMins} onChange={setEstimate} onClose={() => setDurationOpen(false)} />
+              <DurationPicker
+                value={idea.estimatedMins}
+                onChange={setEstimate}
+                onClose={() => setDurationOpen(false)}
+              />
             </PopoverContent>
           </Popover>
         )}
@@ -418,7 +430,12 @@ export function IdeaCard({
         </Popover>
 
         {inPlanner && (
-          <Link to="/app/focus/$taskId" params={{ taskId: idea.promotedTaskId! }} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 hover:underline dark:text-emerald-400">
+          <Link
+            to="/app/focus/$taskId"
+            params={{ taskId: idea.promotedTaskId! }}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+          >
             <Check className="h-3 w-3" strokeWidth={2.5} />
             Open task
           </Link>
@@ -452,6 +469,7 @@ export function IdeaCard({
                 family={DROPDOWN_FAMILY}
                 handlers={handlers}
                 otherColumns={otherColumns}
+                idea={idea}
               />
             </DropdownMenuContent>
           </DropdownMenu>
@@ -471,6 +489,7 @@ export function IdeaCard({
             family={CONTEXT_FAMILY}
             handlers={handlers}
             otherColumns={otherColumns}
+            idea={idea}
           />
         </ContextMenuContent>
       </ContextMenu>
@@ -498,7 +517,11 @@ function IdeaSubtaskPreview({ ideaId }: { ideaId: string }) {
         onToggleSubtask={(id) => {
           const current = subtasks.find((s) => s.id === id);
           if (!current) return;
-          update.mutate({ ideaId, subtaskId: id, input: { completed: !current.completed } });
+          update.mutate({
+            ideaId,
+            subtaskId: id,
+            input: { completed: !current.completed },
+          });
         }}
       />
     </div>

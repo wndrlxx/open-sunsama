@@ -720,42 +720,67 @@ ideasRouter.patch(
     const updates = c.req.valid("json");
     const db = getDb();
 
-    const [existing] = await db
-      .select()
-      .from(ideas)
-      .where(and(eq(ideas.id, id), eq(ideas.userId, userId)))
-      .limit(1);
-    if (!existing) throw new NotFoundError("Idea", id);
+    const { idea, previous } = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(ideas)
+        .where(and(eq(ideas.id, id), eq(ideas.userId, userId)))
+        .limit(1)
+        .for("update");
+      if (!existing) throw new NotFoundError("Idea", id);
 
-    const updateData: Record<string, unknown> = { updatedAt: new Date() };
-    if (updates.title !== undefined) updateData.title = updates.title;
-    if (updates.notes !== undefined) updateData.notes = updates.notes;
-    if (updates.estimatedMins !== undefined)
-      updateData.estimatedMins = updates.estimatedMins;
-    if (updates.priority !== undefined) updateData.priority = updates.priority;
-    if (updates.position !== undefined) updateData.position = updates.position;
-    if (updates.completedAt !== undefined)
-      updateData.completedAt = updates.completedAt
-        ? new Date(updates.completedAt)
-        : null;
-    if (updates.columnId !== undefined) {
-      // Moving columns — keep boardId consistent with the target column.
-      const target = await assertColumnOwned(userId, updates.columnId);
-      updateData.columnId = updates.columnId;
-      updateData.boardId = target.boardId;
-    }
+      const { completedAt, ...fields } = updates;
+      const updateData: Partial<typeof ideas.$inferInsert> = {
+        ...fields,
+        updatedAt: new Date(),
+      };
+      if (completedAt !== undefined) {
+        updateData.completedAt = completedAt ? new Date(completedAt) : null;
+      }
+      if (updates.columnId !== undefined) {
+        // Lock the destination while assigning append positions to menu moves.
+        // Board membership is always derived from the owned column.
+        const [target] = await tx
+          .select()
+          .from(ideaColumns)
+          .where(
+            and(
+              eq(ideaColumns.id, updates.columnId),
+              eq(ideaColumns.userId, userId)
+            )
+          )
+          .limit(1)
+          .for("update");
+        if (!target) throw new NotFoundError("Column", updates.columnId);
+        updateData.boardId = target.boardId;
+        if (target.id !== existing.columnId && updates.position === undefined) {
+          const [last] = await tx
+            .select({
+              position: sql<number>`COALESCE(MAX(${ideas.position}), -1)`,
+            })
+            .from(ideas)
+            .where(
+              and(eq(ideas.columnId, target.id), eq(ideas.userId, userId))
+            );
+          updateData.position = Number(last?.position ?? -1) + 1;
+        }
+      }
 
-    const [idea] = await db
-      .update(ideas)
-      .set(updateData)
-      .where(and(eq(ideas.id, id), eq(ideas.userId, userId)))
-      .returning();
-    if (!idea) throw new NotFoundError("Idea", id);
+      const [updated] = await tx
+        .update(ideas)
+        .set(updateData)
+        .where(and(eq(ideas.id, id), eq(ideas.userId, userId)))
+        .returning();
+      if (!updated) throw new NotFoundError("Idea", id);
+      return { idea: updated, previous: existing };
+    });
 
     publishEvent(userId, "idea:updated", {
       ideaId: id,
       boardId: idea.boardId,
       columnId: idea.columnId,
+      previousBoardId: previous.boardId,
+      previousColumnId: previous.columnId,
     });
     return c.json({ success: true, data: idea });
   }

@@ -221,11 +221,19 @@ function handleWebSocketEvent(
       batcher.schedule(ideaBoardKeys.lists());
       const payload =
         event.payload && typeof event.payload === "object"
-          ? (event.payload as { boardId?: string; ideaId?: string })
+          ? (event.payload as {
+              boardId?: string;
+              previousBoardId?: string;
+              ideaId?: string;
+            })
           : undefined;
       if (payload?.boardId) {
         batcher.schedule(ideaBoardKeys.columns(payload.boardId));
         batcher.schedule(ideaKeys.byBoard(payload.boardId));
+        if (payload.previousBoardId) {
+          batcher.schedule(ideaBoardKeys.columns(payload.previousBoardId));
+          batcher.schedule(ideaKeys.byBoard(payload.previousBoardId));
+        }
       } else {
         // Board-level events without a boardId (rare) — refetch all ideas.
         batcher.schedule(ideaKeys.lists());
