@@ -31,6 +31,18 @@ import "./index.css";
 installChunkErrorRecovery();
 captureInstallPrompt();
 
+// Safari's saved web app should keep a stable workspace when pinching.
+if (window.matchMedia("(display-mode: standalone)").matches) {
+  const preventZoom = (event: Event) => event.preventDefault();
+  document.addEventListener("gesturestart", preventZoom, { passive: false });
+  document.addEventListener("gesturechange", preventZoom, { passive: false });
+
+  import.meta.hot?.dispose(() => {
+    document.removeEventListener("gesturestart", preventZoom);
+    document.removeEventListener("gesturechange", preventZoom);
+  });
+}
+
 // Finish a "reset local data" from the error screen before the persisted
 // query cache is restored.
 applyPendingCacheReset();
